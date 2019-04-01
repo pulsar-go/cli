@@ -1,47 +1,52 @@
 package main
 
 import (
-	"archive/zip"
+	"errors"
 	"io"
 	"log"
 	"os"
 
+	"archive/zip"
 	"io/ioutil"
 	"net/http"
+	"os/exec"
 	"path/filepath"
 )
 
-var starterRepo = "https://github.com/pulsar-go/example/archive/master.zip"
+const (
+	// PulsarFramework Pulsar framework package reference
+	PulsarFramework = "github.com/pulsar-go/pulsar"
+
+	// SkeletonRepo Pulsar skeleton repo to start new projects
+	SkeletonRepo = "https://github.com/pulsar-go/example/archive/master.zip"
+)
 
 func main() {
 	// argument 'ǹame'
 	name := os.Args[1]
-	// (option 'version')
 
 	path, err := filepath.Abs(name)
 	exitOnError(err)
 
 	// if cwd/name does exist => exit
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		log.Fatal(err)
+		log.Fatal(errors.New("Folder with name " + name + " already exists!"))
 	}
 
 	// create directory in cwd() . /name
 	err = os.MkdirAll(path, 0755)
 	exitOnError(err)
 
-	// (get version)
-
-	// download project-zip
-	// https://github.com/pulsar-go/example/archive/master.zip
-	response, err := http.Get(starterRepo)
+	// download project-zipPulsar skeleton repo to start new projects
+	response, err := http.Get(SkeletonRepo)
 	exitOnError(err)
 	defer response.Body.Close()
 
 	data, err := ioutil.ReadAll(response.Body)
 	exitOnError(err)
 
-	file, err := os.Create(path + "/tmp")
+	zipPath := path + "/tmp"
+	file, err := os.Create(zipPath)
 	exitOnError(err)
 	defer file.Close()
 
@@ -49,16 +54,12 @@ func main() {
 	exitOnError(err)
 
 	// extract zip
-	var filenames []string
-
-	reader, err := zip.OpenReader(path + "/tmp")
+	reader, err := zip.OpenReader(zipPath)
 	exitOnError(err)
 	defer reader.Close()
 
 	for _, file := range reader.File {
 		fpath := filepath.Join(path, file.Name)
-
-		filenames = append(filenames, fpath)
 
 		if file.FileInfo().IsDir() {
 			// Make folder
@@ -83,17 +84,27 @@ func main() {
 		exitOnError(err)
 	}
 
-	// files, err := ioutil.ReadDir("./example-master")
-	// exitOnError(err)
+	unzippedFolder := path + "/example-master"
+	files, err := ioutil.ReadDir(unzippedFolder)
+	exitOnError(err)
 
-	// for _, file := range files {
-	// 	oldLocation := filepath.Join(path+"/example-master", file.Name)
-	// 	newLocation := filepath.Join(path, file.Name)
-	// 	err := os.Rename(oldLocation, newLocation)
-	// 	exitOnError(err)
-	// }
+	for _, file := range files {
+		oldLocation := filepath.Join(unzippedFolder, file.Name())
+		newLocation := filepath.Join(path, file.Name())
+		err := os.Rename(oldLocation, newLocation)
+		exitOnError(err)
+	}
 
 	// delete zip
+	os.Remove(unzippedFolder)
+	os.Remove(zipPath)
+
+	// install PulsarFramework if not already installed
+	_, err = exec.Command("sh", "-c", "go list "+PulsarFramework).Output()
+	if err != nil {
+		_, err := exec.Command("sh", "-c", "go get "+PulsarFramework).Output()
+		exitOnError(err)
+	}
 }
 
 func exitOnError(err error) {
